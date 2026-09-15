@@ -19,7 +19,7 @@ services:
 
   booking-service:
     build: .
-    container_name: kundtjanst-service
+    container_name: kundtjanst-servicesddd
     ports:
       - "8081:8081"
     environment:

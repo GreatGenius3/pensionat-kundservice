@@ -24,7 +24,7 @@ spec:
                   name: mysql-secret
                   key: mysql-root-password
             - name: MYSQL_DATABASE
-              value: kundtjanst
+              value: kundservice_booking
             - name: MYSQL_USER
               value: kundtjanst
             - name: MYSQL_PASSWORD

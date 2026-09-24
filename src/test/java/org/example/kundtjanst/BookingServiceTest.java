@@ -4,7 +4,6 @@ import org.example.kundtjanst.client.BookingServiceClient;
 import org.example.kundtjanst.dto.BookingDto;
 import org.example.kundtjanst.dto.CustomerDto;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -12,9 +11,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-// Kräver att bokningstjänsten körs. Sätt BOOKING_SERVICE_IT=true för att köra.
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "BOOKING_SERVICE_IT", matches = "true")
 public class BookingServiceTest
 {
     @Autowired

@@ -66,7 +66,7 @@ class CustomerControllerIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/customers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(newCustomer)))
-                .andExpect(status().isCreated())
+            .andExpect(status().isCreated())
                 .andReturn();
 
         String response = result.getResponse().getContentAsString();

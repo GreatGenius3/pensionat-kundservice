@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [ martin ]
+    branches: [ main ]
   pull_request:
-    branches: [ martin ]
+    branches: [ main ]
 
 env:
   REGISTRY: ghcr.io
@@ -46,7 +46,7 @@ jobs:
 
   build-and-push:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/martin'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,7 +87,7 @@ jobs:
   deploy-k8s:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/martin'
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Check out
         uses: actions/checkout@v4

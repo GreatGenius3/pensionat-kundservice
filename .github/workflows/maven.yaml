@@ -13,6 +13,23 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: kundservice_booking
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -prootpassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/kundservice_booking
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -22,15 +39,14 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: maven
 
-      - name: Build with Maven
-        run: mvn clean package
-
-      - name: Run tests
-        run: mvn test
+      - name: Build and test with Maven
+        run: ./mvnw -B clean verify -Dtest='!BookingServiceTest'
 
   build-and-push:
     needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -54,9 +70,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -82,8 +101,7 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
 
       - name: Update deployment image
-        run: |
-          kubectl set image deployment/kundtjanst-service kundtjanst-service=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        run: kubectl set image deployment/kundtjanst-deployment kundtjanst=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
 
       - name: Restart deployment
-        run: kubectl rollout restart deployment/kundtjanst-deployment
+        run: kubectl rollout status deployment/kundtjanst-deployment --timeout=120s

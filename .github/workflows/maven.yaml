@@ -83,7 +83,7 @@ jobs:
 
       - name: Update deployment image
         run: |
-          kubectl set image deployment/booking-service booking-service=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          kubectl set image deployment/kundtjanst-service kundtjanst-service=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Restart deployment
         run: kubectl rollout restart deployment/kundtjanst-deployment

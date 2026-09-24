@@ -2,9 +2,10 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ martin, main ]
   pull_request:
-    branches: [ main ]
+    branches: [ martin, main ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -13,6 +14,23 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: kundservice_booking
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -prootpassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/kundservice_booking
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -22,15 +40,14 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: maven
 
-      - name: Build with Maven
-        run: mvn clean package
-
-      - name: Run tests
-        run: mvn test
+      - name: Build and test with Maven
+        run: mvn -B clean package
 
   build-and-push:
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -54,6 +71,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -68,22 +89,42 @@ jobs:
   deploy-k8s:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     steps:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: Check for kubeconfig
+        id: kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          if [ -n "$KUBE_CONFIG" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "KUBE_CONFIG saknas - hoppar över deploy." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
+        if: steps.kubeconfig.outputs.present == 'true'
+        uses: azure/setup-kubectl@v4
 
       - name: Configure kubectl
+        if: steps.kubeconfig.outputs.present == 'true'
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
 
       - name: Update deployment image
+        if: steps.kubeconfig.outputs.present == 'true'
         run: |
-          kubectl set image deployment/kundtjanst-service kundtjanst-service=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          kubectl set image deployment/kundtjanst-deployment \
+            kundtjanst=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-      - name: Restart deployment
-        run: kubectl rollout restart deployment/kundtjanst-deployment
+      - name: Wait for rollout
+        if: steps.kubeconfig.outputs.present == 'true'
+        run: kubectl rollout status deployment/kundtjanst-deployment --timeout=120s
